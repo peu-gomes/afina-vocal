@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { ArrowUp, ArrowDown, Check, CircleDot, MicOff } from 'lucide-react';
 import { PitchInfo } from '../types';
@@ -29,6 +29,68 @@ export default function PitchTunerIndicator({
   octaveRule
 }: PitchTunerIndicatorProps) {
   
+  // High-performance direct style sync setup to bypass React high-frequency render overhead
+  const needleRef = useRef<HTMLDivElement>(null);
+  const targetCentsRef = useRef<number | null>(null);
+  const currentCentsRef = useRef<number>(0);
+  const currentOpacityRef = useRef<number>(0);
+  const animationFrameRef = useRef<number | null>(null);
+  const lastTimeRef = useRef<number>(performance.now());
+
+  // Buffer the latest cents deviation to be queried by the requestAnimationFrame loop
+  useEffect(() => {
+    targetCentsRef.current = activePitch ? activePitch.centsDeviation : null;
+    // Snaps current position on initial vocal detection to prevent long slides from zero
+    if (activePitch && currentOpacityRef.current < 0.1) {
+      currentCentsRef.current = activePitch.centsDeviation;
+    }
+  }, [activePitch]);
+
+  // Ultra-low latency requestAnimationFrame loop to map visual indicator 1:1 with audio analysis thread at 60fps
+  useEffect(() => {
+    const syncVisualNeedle = (now: number) => {
+      const needle = needleRef.current;
+      if (needle) {
+        const targetCents = targetCentsRef.current;
+        const dT = Math.min(50, now - lastTimeRef.current);
+        lastTimeRef.current = now;
+
+        // Decoupled 60fps visual smoothing rate
+        const timeFactor = dT / 16.67; // Normalized frame delay around standard 60fps
+        const lerpCentsCoeff = Math.min(1, 0.24 * timeFactor);
+        const lerpOpacityCoeff = Math.min(1, 0.18 * timeFactor);
+
+        if (targetCents !== null) {
+          // Smoothly interpolate current cents towards the target deviation
+          currentCentsRef.current += (targetCents - currentCentsRef.current) * lerpCentsCoeff;
+          currentOpacityRef.current += (1 - currentOpacityRef.current) * lerpOpacityCoeff;
+        } else {
+          // Fade needle opacity to 0 smoothly when no tone is detected
+          currentOpacityRef.current += (0 - currentOpacityRef.current) * lerpOpacityCoeff;
+        }
+
+        const percentage = Math.max(0, Math.min(100, 50 + currentCentsRef.current));
+        needle.style.left = `${percentage}%`;
+        needle.style.opacity = `${currentOpacityRef.current}`;
+        
+        // Optimize layer rendering by toggling display property
+        if (currentOpacityRef.current < 0.01) {
+          needle.style.display = 'none';
+        } else {
+          needle.style.display = 'block';
+        }
+      }
+      animationFrameRef.current = requestAnimationFrame(syncVisualNeedle);
+    };
+
+    animationFrameRef.current = requestAnimationFrame(syncVisualNeedle);
+    return () => {
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, []);
+
   // Calculate target characteristics
   const targetNoteName = useMemo(() => midiToNoteString(targetMidi, true), [targetMidi]);
   const targetFreq = useMemo(() => midiToFrequency(targetMidi), [targetMidi]);
@@ -254,25 +316,18 @@ export default function PitchTunerIndicator({
             {/* Zero-point reference line */}
             <div className="absolute top-0 bottom-0 left-1/2 w-0.5 bg-zinc-300 dark:bg-zinc-600" />
 
-            {/* Needle indicator cursor (Beautiful spring movement via motion) */}
-            {activePitch ? (
-              <motion.div
-                layout
-                id="tuner-needle"
-                className={`absolute -top-1.5 h-5.5 w-3 rounded-md shadow-md -translate-x-1/2 cursor-default ${
-                  isInTune ? 'bg-emerald-500 scale-110 shadow-emerald-500/30' : 'bg-indigo-500 shadow-indigo-550/30'
-                }`}
-                animate={{
-                  left: `${Math.max(0, Math.min(100, 50 + activePitch.centsDeviation))}%`
-                }}
-                transition={{
-                  type: 'spring',
-                  stiffness: 100,
-                  damping: 15,
-                  mass: 0.3
-                }}
-              />
-            ) : null}
+            {/* Needle indicator cursor (Beautifully synchronized 1:1 via requestAnimationFrame) */}
+            <div
+              ref={needleRef}
+              id="tuner-needle"
+              className={`absolute -top-1.5 h-5.5 w-3 rounded-md shadow-md -translate-x-1/2 cursor-default will-change-[left,opacity] transition-[background-color,transform] duration-200 ${
+                isInTune ? 'bg-emerald-500 scale-110 shadow-emerald-500/30' : 'bg-indigo-500 shadow-indigo-550/30'
+              }`}
+              style={{
+                left: `${Math.max(0, Math.min(100, 50 + (activePitch ? activePitch.centsDeviation : 0)))}%`,
+                opacity: activePitch ? 1 : 0
+              }}
+            />
           </div>
 
           {/* Active pointer offset indicator */}

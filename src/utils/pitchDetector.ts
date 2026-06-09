@@ -10,7 +10,13 @@ import { PitchInfo, NOTE_NAMES, NOTE_NAMES_PT } from '../types';
  * Extremely accurate for human voice, preventing octave doubling/halving issues
  * and formant interference without requiring active filtering.
  */
-export function detectPitch(buffer: Float32Array, sampleRate: number): number {
+export function detectPitch(
+  buffer: Float32Array,
+  sampleRate: number,
+  noiseGateThreshold = 0.004,
+  yinDetectionThreshold = 0.15,
+  yinConfidenceThreshold = 0.35
+): number {
   const SIZE = buffer.length;
 
   // 1. Calculate Root-Mean-Square (RMS) to detect signal volume
@@ -20,8 +26,8 @@ export function detectPitch(buffer: Float32Array, sampleRate: number): number {
   }
   rms = Math.sqrt(rms / SIZE);
 
-  // Very sensitive flat threshold (0.005) to capture soft singing but filter room hum
-  if (rms < 0.005) {
+  // Sensitive noise-gate threshold to capture natural voice/singing while eliminating pure silence/line hum
+  if (rms < noiseGateThreshold) {
     return -1;
   }
 
@@ -59,9 +65,8 @@ export function detectPitch(buffer: Float32Array, sampleRate: number): number {
   }
 
   // Step 3: Absolute Thresholding
-  // Find the first local minimum that is below the threshold (usually 0.1 to 0.15).
-  // If none is found, we fall back to the global minimum.
-  const threshold = 0.15;
+  // Find the first local minimum that is below the threshold.
+  const threshold = yinDetectionThreshold;
   let period = -1;
   
   // Find first local minimum below threshold
@@ -85,9 +90,59 @@ export function detectPitch(buffer: Float32Array, sampleRate: number): number {
         bestTau = tau;
       }
     }
-    // Only accept if it is a reasonably distinct valley
-    if (minVal < 0.35) {
+    // Only accept if it is a reasonably distinct and periodic valley.
+    if (minVal < yinConfidenceThreshold) {
       period = bestTau;
+    }
+  }
+
+  // Step 3b: Adaptive Octave and Subharmonic validation to prevent doubling/halving errors
+  // If we found a candidate period, examine octave multiples (period * 2) and sub-multiples (period / 2)
+  // to ensure we choose the true vocal fundamental frequency.
+  if (period !== -1) {
+    // 1. Octave Doubling prevention:
+    // If we picked a high frequency (small period), check if there is a deep local minimum
+    // at twice the period (one octave lower) that is also extremely periodic.
+    const doublePeriod = Math.round(period * 2);
+    if (doublePeriod < maxLag - 1) {
+      let bestDoublePeriod = -1;
+      let minAroundDouble = 1000.0;
+      for (let t = doublePeriod - 2; t <= doublePeriod + 2; t++) {
+        if (t >= minLag && t < maxLag - 1) {
+          if (dPrime[t] < minAroundDouble && dPrime[t] < dPrime[t - 1] && dPrime[t] < dPrime[t + 1]) {
+            minAroundDouble = dPrime[t];
+            bestDoublePeriod = t;
+          }
+        }
+      }
+      // If the octave lower valley is extremely well-defined (very low difference value),
+      // correct our period to the lower octave.
+      if (bestDoublePeriod !== -1 && minAroundDouble < threshold * 0.8) {
+        period = bestDoublePeriod;
+      }
+    }
+
+    // 2. Octave Halving prevention:
+    // If we picked a low frequency (large period), check if there is a local minimum
+    // at half the period (one octave higher) that also successfully satisfies the threshold.
+    // Standard YIN guidelines prefer the earliest valley to prevent under-pitching.
+    const halfPeriod = Math.round(period / 2);
+    if (halfPeriod >= minLag) {
+      let bestHalfPeriod = -1;
+      let minAroundHalf = 1000.0;
+      for (let t = halfPeriod - 1; t <= halfPeriod + 1; t++) {
+        if (t >= minLag && t < maxLag - 1) {
+          if (dPrime[t] < minAroundHalf && dPrime[t] < dPrime[t - 1] && dPrime[t] < dPrime[t + 1]) {
+            minAroundHalf = dPrime[t];
+            bestHalfPeriod = t;
+          }
+        }
+      }
+      // If the higher octave valley is also clean and below a slightly eased threshold,
+      // override and pick the higher octave fundamental.
+      if (bestHalfPeriod !== -1 && minAroundHalf < threshold * 1.15) {
+        period = bestHalfPeriod;
+      }
     }
   }
 

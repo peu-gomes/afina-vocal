@@ -68,6 +68,13 @@ export interface UserPreferences {
   showFrequencyHz: boolean;
   theme: ThemeMode;
   
+  // Custom Filter & Audio Settings
+  filterNotchEnabled: boolean;
+  filterNotchQ: number;
+  noiseGateThreshold: number;
+  yinDetectionThreshold: number;
+  yinConfidenceThreshold: number;
+  
   firstAccessCompleted: boolean;
   savedVocalTestResult: {
     minMidi: number;
@@ -105,6 +112,13 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   showDetectedNote: true,
   showFrequencyHz: true,
   theme: 'claro', // App defaults to elegant light theme with high contrast/soft colors
+  
+  // Custom Filter & Audio Settings
+  filterNotchEnabled: true,
+  filterNotchQ: 20.0,
+  noiseGateThreshold: 0.004,
+  yinDetectionThreshold: 0.15,
+  yinConfidenceThreshold: 0.35,
   
   firstAccessCompleted: false,
   savedVocalTestResult: null

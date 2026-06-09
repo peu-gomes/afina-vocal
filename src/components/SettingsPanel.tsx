@@ -19,7 +19,11 @@ import {
   Eye,
   Check,
   ChevronRight,
-  Sparkles
+  Sparkles,
+  Filter,
+  Play,
+  Square,
+  Activity
 } from 'lucide-react';
 import {
   UserPreferences,
@@ -33,9 +37,10 @@ import {
   OctaveRule,
   ThemeMode,
   NOTE_NAMES,
-  NOTE_NAMES_PT
+  NOTE_NAMES_PT,
+  PitchInfo
 } from '../types';
-import { midiToNoteString } from '../utils/pitchDetector';
+import { midiToNoteString, midiToFrequency } from '../utils/pitchDetector';
 
 interface SettingsPanelProps {
   isOpen: boolean;
@@ -45,9 +50,13 @@ interface SettingsPanelProps {
   onTriggerVocalTest: () => void;
   referenceVolume: number;
   onVolumeChange: (volume: number) => void;
+  isPlayingReference?: boolean;
+  onToggleReference?: () => void;
+  activePitch?: PitchInfo | null;
+  targetMidi?: number;
 }
 
-type SettingsTab = 'perfil' | 'dificuldade' | 'notas' | 'geral';
+type SettingsTab = 'perfil' | 'dificuldade' | 'notas' | 'filtros' | 'geral';
 
 export default function SettingsPanel({
   isOpen,
@@ -56,7 +65,11 @@ export default function SettingsPanel({
   onUpdatePreferences,
   onTriggerVocalTest,
   referenceVolume,
-  onVolumeChange
+  onVolumeChange,
+  isPlayingReference = false,
+  onToggleReference = () => {},
+  activePitch = null,
+  targetMidi = 60
 }: SettingsPanelProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>('perfil');
 
@@ -93,6 +106,7 @@ export default function SettingsPanel({
     { id: 'perfil' as const, label: 'Perfil', icon: Mic },
     { id: 'dificuldade' as const, label: 'Precisão', icon: Sliders },
     { id: 'notas' as const, label: 'Notas', icon: Music },
+    { id: 'filtros' as const, label: 'Filtros', icon: Filter },
     { id: 'geral' as const, label: 'Geral', icon: ToggleLeft },
   ];
 
@@ -412,6 +426,281 @@ export default function SettingsPanel({
                         <option value="aguda">Aguda (Alto)</option>
                       </select>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Category: FILTROS E ÁUDIO */}
+              {activeTab === 'filtros' && (
+                <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-bold text-indigo-500 uppercase tracking-widest">Filtros de Áudio & Limiares</h4>
+                    <p className="text-[11px] text-zinc-400">
+                      Otimize o isolamento do microfone e a precisão do algoritmo de afinação YIN
+                    </p>
+                  </div>
+
+                  {/* Real-time Playground & Test Card */}
+                  <div className="p-4 bg-zinc-900/5 dark:bg-white/5 border border-dashed border-indigo-200 dark:border-indigo-900/50 rounded-2xl space-y-3.5">
+                    <div className="flex items-center gap-2">
+                      <Activity className="w-4 h-4 text-indigo-500 animate-pulse" />
+                      <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">Laboratório de Áudio em Tempo Real</span>
+                    </div>
+
+                    <p className="text-[10px] text-zinc-400">
+                      Toque o tom de guia e mude as configurações de limiar abaixo. Veja como o algoritmo de afinação e o filtro Notch de eco reagem instantaneamente aos ruídos e à sua voz!
+                    </p>
+
+                    <div className="flex flex-col sm:flex-row gap-2.5 items-stretch">
+                      {/* Guide tone control */}
+                      <button
+                        id="toggle-guide-tone-test"
+                        onClick={onToggleReference}
+                        className={`flex-1 py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-98 ${
+                          isPlayingReference
+                            ? 'bg-red-500 hover:bg-red-600 text-white shadow-md shadow-red-500/10'
+                            : 'bg-indigo-600 hover:bg-indigo-750 text-white shadow-md shadow-indigo-600/10'
+                        }`}
+                      >
+                        {isPlayingReference ? (
+                          <>
+                            <Square className="w-3.5 h-3.5 fill-current" />
+                            <span>Desativar Tom de Guia</span>
+                          </>
+                        ) : (
+                          <>
+                            <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
+                            <span>Ativar Tom de Guia</span>
+                          </>
+                        )}
+                      </button>
+
+                      <div className="flex items-center gap-2 bg-zinc-100 dark:bg-zinc-900 rounded-xl px-3 py-1.5 text-[11px] font-mono justify-center">
+                        <span className="text-zinc-450 dark:text-zinc-400">Tom de Guia:</span>
+                        <span className="text-indigo-650 dark:text-indigo-400 font-bold">
+                          {Math.round(midiToFrequency(targetMidi))} Hz ({midiToNoteString(targetMidi)})
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Dynamic Status Display of the Microphone Audio Input */}
+                    <div className="p-3 bg-zinc-100/50 dark:bg-zinc-950/40 rounded-xl border border-zinc-150 dark:border-zinc-900 h-[178px] flex flex-col justify-between overflow-hidden">
+                      {/* Top status bar */}
+                      <div className="flex justify-between items-center shrink-0 h-5">
+                        <span className="text-[10px] uppercase font-bold tracking-wider text-zinc-400">Monitor de Entrada Vocal</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[9px] font-bold text-zinc-400">
+                            {activePitch ? 'SINAL DETECTADO' : 'AGUARDANDO...'}
+                          </span>
+                          <span className={`h-2 w-2 rounded-full ${activePitch ? 'bg-emerald-500 animate-pulse scale-110 shadow-sm shadow-emerald-500/50' : 'bg-zinc-300 dark:bg-zinc-700'}`} />
+                        </div>
+                      </div>
+
+                      {/* Pitch Data Card (Fixed height: h-[52px]) */}
+                      <div className="h-[52px] relative flex items-center justify-center">
+                        {activePitch ? (
+                          <div className="grid grid-cols-2 gap-2 text-xs w-full absolute inset-0">
+                            <div className="flex flex-col p-1.5 bg-white dark:bg-zinc-900 rounded-lg justify-center border border-zinc-100 dark:border-zinc-900 shadow-3xs">
+                              <span className="text-[8.5px] text-zinc-400 block uppercase font-bold tracking-tight">Frequência</span>
+                              <span className="font-extrabold font-mono text-zinc-800 dark:text-zinc-100 text-sm">{activePitch.frequency.toFixed(1)} Hz</span>
+                            </div>
+                            <div className="flex flex-col p-1.5 bg-white dark:bg-zinc-900 rounded-lg justify-center border border-zinc-100 dark:border-zinc-900 shadow-3xs">
+                              <span className="text-[8.5px] text-zinc-400 block uppercase font-bold tracking-tight font-sans">Nota Reconhecida</span>
+                              <span className="font-extrabold text-zinc-800 dark:text-zinc-100 truncate text-xs">
+                                {activePitch.noteNamePt} ({activePitch.noteName})
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center p-2 rounded-lg border border-dashed border-zinc-200 dark:border-zinc-805 w-full absolute inset-0 text-zinc-450 gap-1 select-none">
+                            <Mic className="w-4 h-4 text-zinc-350 dark:text-zinc-700 animate-pulse shrink-0" />
+                            <span className="text-[10px] font-bold tracking-tight">Ruído de fundo ignorado pelo silenciador</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Warning and Notification Section (Fixed height container: h-[56px] containing one or two status slots) */}
+                      <div className="h-[56px] flex flex-col justify-center text-[10px] shrink-0 border-t border-zinc-100 dark:border-zinc-900/60 pt-2">
+                        {isPlayingReference ? (
+                          <div className="space-y-1">
+                            {activePitch && Math.abs(activePitch.frequency - midiToFrequency(targetMidi)) < 8 ? (
+                              <div className="text-[9.5px] text-amber-500 bg-amber-500/10 px-2 py-1 rounded-lg border border-amber-500/15 line-clamp-2 leading-tight">
+                                Atenção: Se o microfone captar o alto-falante, ative o <strong>Filtro Notch</strong> abaixo.
+                              </div>
+                            ) : preferences.filterNotchEnabled ? (
+                              <div className="text-[9.5px] text-indigo-505 dark:text-indigo-400 bg-indigo-500/5 px-2 py-1.5 rounded-lg border border-indigo-550/10 flex items-center gap-1.5 select-none leading-none">
+                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse shrink-0" />
+                                <span className="font-medium">Notch atenuando feedbacks a {Math.round(midiToFrequency(targetMidi))} Hz.</span>
+                              </div>
+                            ) : (
+                              <div className="text-[9.5px] text-zinc-450 dark:text-zinc-500 bg-zinc-100/30 dark:bg-zinc-900/40 px-2 py-1.5 rounded-lg flex items-center gap-1.5 select-none leading-none">
+                                <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 shrink-0" />
+                                <span>Tom de Guia ativo. Cante para afinar em uníssono.</span>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-[9.5px] text-zinc-400 italic text-center py-2 select-none leading-tight">
+                            Ative o tom de guia para validar os filtros contra ressonâncias acústicas.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 1. Notch Filter Controls */}
+                  <div className="p-4 bg-zinc-50 dark:bg-zinc-950/30 border border-zinc-150 dark:border-zinc-900 rounded-2xl space-y-3.5">
+                    <div className="flex items-center justify-between pb-1 border-b border-zinc-100 dark:border-zinc-900">
+                      <div>
+                        <span className="text-xs font-black text-zinc-800 dark:text-zinc-205">Filtro Notch de Eco</span>
+                        <span className="text-[9.5px] text-zinc-400 block max-w-[240px]">Atenua a nota guia tocada pelo app de vazar no seu microfone</span>
+                      </div>
+                      <button
+                        id="toggle-notch-filter"
+                        onClick={() => updatePref('filterNotchEnabled', !preferences.filterNotchEnabled)}
+                        className={`w-10 h-5.5 rounded-full p-0.5 transition-all outline-none ${
+                          preferences.filterNotchEnabled ? 'bg-indigo-600 flex justify-end' : 'bg-zinc-300 dark:bg-zinc-750 flex justify-start'
+                        }`}
+                      >
+                        <div className="w-4.5 h-4.5 rounded-full bg-white shadow-xs" />
+                      </button>
+                    </div>
+
+                    {/* Always render the body of notch filter, but apply disabled style to keep layout shape perfectly static and constant size */}
+                    <div className={`space-y-2 pt-1 transition-all duration-200 ${preferences.filterNotchEnabled ? 'opacity-100' : 'opacity-35 pointer-events-none select-none'}`}>
+                      <div className="flex justify-between items-center text-[10.5px] font-bold text-zinc-500">
+                        <span>Seletividade (Fator Q)</span>
+                        <span className="font-mono text-zinc-700 dark:text-zinc-300 font-extrabold bg-zinc-100 dark:bg-zinc-900 px-1.5 py-0.5 rounded text-[10px]">
+                          {preferences.filterNotchQ.toFixed(1)}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="1"
+                        max="50"
+                        step="1"
+                        value={preferences.filterNotchQ}
+                        disabled={!preferences.filterNotchEnabled}
+                        onChange={(e) => updatePref('filterNotchQ', Number(e.target.value))}
+                        className="w-full h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                      />
+                      <div className="flex justify-between text-[9px] text-zinc-400">
+                        <span>Largo (1.0)</span>
+                        <span className="italic">Ideal: 20.0</span>
+                        <span>Estreito (50.0)</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 2. Noise Gate RMS threshold */}
+                  <div className="p-4 bg-zinc-50 dark:bg-zinc-950/30 border border-zinc-150 dark:border-zinc-900 rounded-2xl space-y-2.5">
+                    <div className="flex justify-between items-center pb-1 border-b border-zinc-100 dark:border-zinc-900">
+                      <div>
+                        <span className="text-xs font-black text-zinc-800 dark:text-zinc-205">Portão de Ruído (Noise Gate)</span>
+                        <span className="text-[9.5px] text-zinc-400 block max-w-[280px]">Rejeitar sopro, hum e ruídos de fundo inferiores ao limiar</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 pt-1">
+                      <div className="flex justify-between items-center text-[10.5px] font-bold text-zinc-500">
+                        <span>Limiar RMS de Volume</span>
+                        <span className="font-mono text-zinc-700 dark:text-zinc-300 font-extrabold bg-zinc-100 dark:bg-zinc-900 px-1.5 py-0.5 rounded text-[10px]">
+                          {preferences.noiseGateThreshold.toFixed(4)}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0.001"
+                        max="0.04"
+                        step="0.001"
+                        value={preferences.noiseGateThreshold}
+                        onChange={(e) => updatePref('noiseGateThreshold', Number(e.target.value))}
+                        className="w-full h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                      />
+                      <div className="flex justify-between text-[9px] text-zinc-400">
+                        <span>Mais Sensível (0.001)</span>
+                        <span className="italic">Ideal: 0.0040</span>
+                        <span>Rígido (0.040)</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 3. YIN Threshold parameters */}
+                  <div className="p-4 bg-zinc-50 dark:bg-zinc-950/30 border border-zinc-150 dark:border-zinc-900 rounded-2xl space-y-4">
+                    <div className="pb-1 border-b border-zinc-100 dark:border-zinc-900">
+                      <span className="text-xs font-black text-zinc-800 dark:text-zinc-205">Algoritmo YIN (Afinador)</span>
+                      <span className="text-[9.5px] text-zinc-400 block">Ajuste fino da rejeição a harmônicos ou ruídos de onda na voz</span>
+                    </div>
+
+                    {/* YIN Detection Threshold */}
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center text-[10.5px] font-bold text-zinc-500">
+                        <span>Limiar de Periodicidade Principal</span>
+                        <span className="font-mono text-zinc-700 dark:text-zinc-300 font-extrabold bg-zinc-100 dark:bg-zinc-900 px-1.5 py-0.5 rounded text-[10px]">
+                          {preferences.yinDetectionThreshold.toFixed(2)}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0.05"
+                        max="0.25"
+                        step="0.01"
+                        value={preferences.yinDetectionThreshold}
+                        onChange={(e) => updatePref('yinDetectionThreshold', Number(e.target.value))}
+                        className="w-full h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                      />
+                      <div className="flex justify-between text-[9px] text-zinc-400">
+                        <span>Exigente (0.05)</span>
+                        <span className="italic">Padrão: 0.15</span>
+                        <span>Permissivo (0.25)</span>
+                      </div>
+                    </div>
+
+                    {/* YIN Confidence/Fallback Threshold */}
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center text-[10.5px] font-bold text-zinc-500">
+                        <span>Fator de Confiança Secundário</span>
+                        <span className="font-mono text-zinc-700 dark:text-zinc-300 font-extrabold bg-zinc-100 dark:bg-zinc-900 px-1.5 py-0.5 rounded text-[10px]">
+                          {preferences.yinConfidenceThreshold.toFixed(2)}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0.10"
+                        max="0.50"
+                        step="0.01"
+                        value={preferences.yinConfidenceThreshold}
+                        onChange={(e) => updatePref('yinConfidenceThreshold', Number(e.target.value))}
+                        className="w-full h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                      />
+                      <div className="flex justify-between text-[9px] text-zinc-400">
+                        <span>Rígido (0.10)</span>
+                        <span className="italic">Padrão: 0.35</span>
+                        <span>Permissivo (0.50)</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Reset Filters Section */}
+                  <div className="pt-2">
+                    <button
+                      id="reset-filters-btn"
+                      onClick={() => {
+                        onUpdatePreferences({
+                          filterNotchEnabled: true,
+                          filterNotchQ: 20.0,
+                          noiseGateThreshold: 0.004,
+                          yinDetectionThreshold: 0.15,
+                          yinConfidenceThreshold: 0.35,
+                        });
+                      }}
+                      className="w-full py-3 px-4 bg-zinc-100 dark:bg-zinc-900 text-zinc-750 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-805 text-xs font-extrabold rounded-2xl text-center border border-zinc-250 dark:border-zinc-850 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                    >
+                      Restaurar Padrões de Áudio
+                    </button>
+                    <p className="text-[10px] text-center text-zinc-400 mt-2">
+                      Restaura as configurações de filtro, portão de ruídos e YIN calibrados de fábrica.
+                    </p>
                   </div>
                 </div>
               )}

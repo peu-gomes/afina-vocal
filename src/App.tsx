@@ -88,6 +88,7 @@ export default function App() {
   // Stream/Listening states
   const [isMicGranted, setIsMicGranted] = useState<null | boolean>(null);
   const [isListening, setIsListening] = useState(false);
+  const [micError, setMicError] = useState<string | null>(null);
 
   // Floating UI toggles
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -99,6 +100,7 @@ export default function App() {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const notchNodeRef = useRef<BiquadFilterNode | null>(null);
   const lastFreqRef = useRef<number>(-1);
   const holdTimeCurrent = useRef<number>(0);
   
@@ -189,6 +191,31 @@ export default function App() {
     }
   }, [validNotesList]);
 
+  // Update dynamic notch filter properties reactively
+  useEffect(() => {
+    if (notchNodeRef.current && audioContextRef.current) {
+      try {
+        const targetFreq = midiToFrequency(targetMidi);
+        notchNodeRef.current.frequency.setValueAtTime(targetFreq, audioContextRef.current.currentTime);
+      } catch (e) {
+        console.warn('Failed to dynamically update notch filter frequency:', e);
+      }
+    }
+  }, [targetMidi]);
+
+  useEffect(() => {
+    if (notchNodeRef.current && audioContextRef.current) {
+      try {
+        // If guide tone is active and notch filter is enabled, use user's Q factor to block feedback.
+        // Otherwise, use virtual zero Q to keep filter transparent and bypassed.
+        const qVal = (isPlayingReference && preferences.filterNotchEnabled) ? preferences.filterNotchQ : 0.0001;
+        notchNodeRef.current.Q.setValueAtTime(qVal, audioContextRef.current.currentTime);
+      } catch (e) {
+        console.warn('Failed to dynamically update notch filter Q:', e);
+      }
+    }
+  }, [isPlayingReference, preferences.filterNotchEnabled, preferences.filterNotchQ]);
+
   // --- 6. Mic Capture Setup ---
   const startMicrophoneInput = async () => {
     try {
@@ -211,7 +238,26 @@ export default function App() {
       const analyserNode = ctx.createAnalyser();
       analyserNode.fftSize = 2048; // Optimal size for high real-time responsiveness
 
-      source.connect(analyserNode);
+      // Initialize Native Dynamic Notch Filter (Robust, iframe-safe and hardware-accelerated)
+      let notchNode: BiquadFilterNode | null = null;
+      try {
+        notchNode = ctx.createBiquadFilter();
+        notchNode.type = 'notch';
+        
+        const targetFreq = midiToFrequency(targetMidi);
+        notchNode.frequency.setValueAtTime(targetFreq, ctx.currentTime);
+        
+        // If guide tone is active and notch filter is enabled, use user's Q factor; otherwise keep transparent
+        const qVal = (isPlayingReference && preferences.filterNotchEnabled) ? preferences.filterNotchQ : 0.0001;
+        notchNode.Q.setValueAtTime(qVal, ctx.currentTime);
+
+        source.connect(notchNode);
+        notchNode.connect(analyserNode);
+        notchNodeRef.current = notchNode;
+      } catch (err) {
+        console.warn('Native notch filter connection failed, falling back to direct stream:', err);
+        source.connect(analyserNode);
+      }
 
       micStreamRef.current = stream;
       analyserRef.current = analyserNode;
@@ -219,10 +265,12 @@ export default function App() {
 
       setIsMicGranted(true);
       setIsListening(true);
-    } catch (e) {
+      setMicError(null);
+    } catch (e: any) {
       console.error('Request microphone failed:', e);
       setIsMicGranted(false);
       setIsListening(false);
+      setMicError(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -246,6 +294,7 @@ export default function App() {
     }
 
     analyserRef.current = null;
+    notchNodeRef.current = null;
     setIsListening(false);
     setActivePitch(null);
   };
@@ -259,6 +308,13 @@ export default function App() {
     }
     return () => stopMicrophoneInput();
   }, [preferences.firstAccessCompleted, preferences.continuousMicrophone]);
+
+  // Start microphone when vocal test modal opens
+  useEffect(() => {
+    if (isVocalTestOpen) {
+      startMicrophoneInput();
+    }
+  }, [isVocalTestOpen]);
 
   // Real-time Pitch Detection RAF Loop
   useEffect(() => {
@@ -280,7 +336,13 @@ export default function App() {
           buffer[i] = (uint8[i] - 128) / 128;
         }
       }
-      const freq = detectPitch(buffer, sampleRate);
+      const freq = detectPitch(
+        buffer,
+        sampleRate,
+        preferencesRef.current.noiseGateThreshold,
+        preferencesRef.current.yinDetectionThreshold,
+        preferencesRef.current.yinConfidenceThreshold
+      );
 
       if (freq > 0) {
         lastFreqRef.current = freq;
@@ -530,8 +592,51 @@ export default function App() {
         </header>
 
         {/* MAIN GAME TUNNING CONTAINER */}
-        <main className="flex-1 relative flex flex-col justify-between py-4">
+        <main className="flex-1 relative flex flex-col justify-between py-4 overflow-y-auto">
           
+          {micError && (
+            <div className="mx-6 mb-4 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-2xl flex gap-3 text-sm animate-in slide-in-from-top duration-300">
+              <div className="w-8 h-8 shrink-0 rounded-lg bg-amber-500 text-white flex items-center justify-center">
+                <MicOff className="w-4.5 h-4.5" />
+              </div>
+              <div className="flex-1 space-y-1.5">
+                <div className="font-extrabold text-amber-950 dark:text-amber-300 leading-tight">
+                  Acesso ao microfone indisponível ou bloqueado
+                </div>
+                <p className="text-xs text-amber-900/80 dark:text-amber-400 leading-relaxed md:max-w-md">
+                  Para detectar sua afinação ao cantar, o navegador precisa de acesso ao seu microfone.
+                </p>
+                <div className="text-[11px] text-zinc-650 dark:text-zinc-400 space-y-1 border-t border-amber-200/40 dark:border-amber-900/20 pt-1.5 font-medium">
+                  <div className="flex gap-1.5 items-start">
+                    <span className="font-bold text-amber-600 dark:text-amber-400">•</span>
+                    <span>Se você negou a permissão, reative-a clicando no ícone de <strong>cadeado</strong> na barra de endereços.</span>
+                  </div>
+                  <div className="flex gap-1.5 items-start">
+                    <span className="font-bold text-amber-600 dark:text-amber-400">•</span>
+                    <span>Como o app roda integrado em um painel (iframe), o navegador pode restringir o uso do microfone. <strong>Prefira clicar para <a href={window.location.href} target="_blank" rel="noopener noreferrer" className="font-extrabold text-indigo-600 dark:text-indigo-400 underline hover:text-indigo-700 transition-colors inline-block">abrir em uma nova aba</a></strong> onde o acesso funciona nativamente.</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 pt-1">
+                  <button
+                    onClick={() => {
+                      setMicError(null);
+                      startMicrophoneInput();
+                    }}
+                    className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
+                  >
+                    Tentar Novamente
+                  </button>
+                  <button
+                    onClick={() => setMicError(null)}
+                    className="text-xs font-bold text-amber-800 dark:text-amber-400 hover:underline cursor-pointer"
+                  >
+                    Dispensar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <PitchTunerIndicator
             targetMidi={targetMidi}
             activePitch={activePitch}
@@ -649,6 +754,10 @@ export default function App() {
                 setReferenceVolumeState(val);
                 setReferenceVolume(val);
               }}
+              isPlayingReference={isPlayingReference}
+              onToggleReference={playToggle}
+              activePitch={activePitch}
+              targetMidi={targetMidi}
             />
           )}
         </AnimatePresence>

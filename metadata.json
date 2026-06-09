@@ -1,0 +1,10 @@
+{
+  "name": "AfinaVocal",
+  "description": "Treinador digital de afinação vocal simples, intuitivo e visual para iniciantes.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

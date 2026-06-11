@@ -30,7 +30,7 @@ export function resumePlayAudioContext() {
   }
 }
 
-export function startReferenceNote(frequency: number, volume: number = 0.5) {
+export function startReferenceNote(frequency: number, volume: number = 0.5, type: OscillatorType = 'triangle') {
   try {
     const ctx = getAudioContext();
     if (ctx.state === 'suspended') {
@@ -44,8 +44,8 @@ export function startReferenceNote(frequency: number, volume: number = 0.5) {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
 
-    // Use a triangle wave for warmer, softer vocal tuning tone
-    osc.type = 'triangle';
+    // Use requested wave (triangle by default) for vocal tuning
+    osc.type = type;
     osc.frequency.setValueAtTime(frequency, ctx.currentTime);
 
     // Anti-pop envelope: fade in

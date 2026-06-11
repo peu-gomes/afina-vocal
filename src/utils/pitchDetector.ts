@@ -5,6 +5,12 @@
 
 import { PitchInfo, NOTE_NAMES, NOTE_NAMES_PT } from '../types';
 
+export interface PitchResult {
+  frequency: number;
+  confidence: number; // 0 to 100 %
+  rms: number;
+}
+
 /**
  * A highly robust, flat implementation of the YIN Pitch Detection Algorithm.
  * Extremely accurate for human voice, preventing octave doubling/halving issues
@@ -16,7 +22,7 @@ export function detectPitch(
   noiseGateThreshold = 0.004,
   yinDetectionThreshold = 0.15,
   yinConfidenceThreshold = 0.35
-): number {
+): PitchResult {
   const SIZE = buffer.length;
 
   // 1. Calculate Root-Mean-Square (RMS) to detect signal volume
@@ -28,7 +34,7 @@ export function detectPitch(
 
   // Sensitive noise-gate threshold to capture natural voice/singing while eliminating pure silence/line hum
   if (rms < noiseGateThreshold) {
-    return -1;
+    return { frequency: -1, confidence: 0, rms };
   }
 
   // We want to detect frequencies from ~55 Hz to 1200 Hz
@@ -147,7 +153,7 @@ export function detectPitch(
   }
 
   if (period === -1 || period < minLag || period >= maxLag) {
-    return -1;
+    return { frequency: -1, confidence: 0, rms };
   }
 
   // Step 4: Parabolic Interpolation for Sub-sample Accuracy
@@ -166,10 +172,15 @@ export function detectPitch(
 
   // Validate voice range (55Hz to 1500Hz)
   if (freq >= 55 && freq <= 1500) {
-    return freq;
+    // Quality of YIN correlation is based on dPrime value at period, typically expected to be < 0.15.
+    // Scale confidence where 0 (fully periodic) is 100% confidence, and >= yinConfidenceThreshold is 0% confidence.
+    const rawVal = dPrime[period];
+    const rawConf = 1.0 - (rawVal / Math.max(0.01, yinConfidenceThreshold));
+    const confidence = Math.min(100, Math.max(0, Math.round(rawConf * 100)));
+    return { frequency: freq, confidence, rms };
   }
 
-  return -1;
+  return { frequency: -1, confidence: 0, rms };
 }
 
 /**

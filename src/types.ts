@@ -75,6 +75,17 @@ export interface UserPreferences {
   yinDetectionThreshold: number;
   yinConfidenceThreshold: number;
   
+  // Developer Diagnostics & Testing Options
+  devModeEnabled: boolean;
+  minConfidence: number;
+  ignoreGuideFrequency: boolean;
+  guideExclusionZone: number;
+  prioritizeVoiceOverGuide: boolean;
+  showGuideIntensity: boolean;
+  minConfirmationFrames: number;
+  guideWaveform: 'sine' | 'triangle' | 'square' | 'sawtooth';
+  analysisUpdateRate: number; // 30, 45, 60 Hz
+
   firstAccessCompleted: boolean;
   savedVocalTestResult: {
     minMidi: number;
@@ -119,6 +130,17 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   noiseGateThreshold: 0.004,
   yinDetectionThreshold: 0.15,
   yinConfidenceThreshold: 0.35,
+  
+  // Developer Diagnostics & Testing Options
+  devModeEnabled: false,
+  minConfidence: 40,
+  ignoreGuideFrequency: false,
+  guideExclusionZone: 5,
+  prioritizeVoiceOverGuide: true,
+  showGuideIntensity: false,
+  minConfirmationFrames: 3,
+  guideWaveform: 'sine',
+  analysisUpdateRate: 60, // 60 FPS update rate by default
   
   firstAccessCompleted: false,
   savedVocalTestResult: null

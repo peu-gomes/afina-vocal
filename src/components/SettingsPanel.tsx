@@ -692,9 +692,17 @@ export default function SettingsPanel({
                           noiseGateThreshold: 0.004,
                           yinDetectionThreshold: 0.15,
                           yinConfidenceThreshold: 0.35,
+                          minConfidence: 40,
+                          ignoreGuideFrequency: false,
+                          guideExclusionZone: 5,
+                          prioritizeVoiceOverGuide: true,
+                          showGuideIntensity: false,
+                          minConfirmationFrames: 3,
+                          guideWaveform: 'sine',
+                          analysisUpdateRate: 60,
                         });
                       }}
-                      className="w-full py-3 px-4 bg-zinc-100 dark:bg-zinc-900 text-zinc-750 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-805 text-xs font-extrabold rounded-2xl text-center border border-zinc-250 dark:border-zinc-850 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                      className="w-full py-3 px-4 bg-zinc-100 dark:bg-zinc-900 text-zinc-750 dark:text-zinc-305 hover:bg-zinc-200 dark:hover:bg-zinc-805 text-xs font-extrabold rounded-2xl text-center border border-zinc-250 dark:border-zinc-850 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
                     >
                       Restaurar Padrões de Áudio
                     </button>

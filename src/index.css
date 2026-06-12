@@ -1,1 +1,56 @@
 @import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* Configurações para sensação de Aplicativo Nativo Rígido */
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  position: fixed; /* Trava o viewport do navegador impedindo arrastar e rolar o app todo */
+  left: 0;
+  top: 0;
+  overscroll-behavior: none;
+  overscroll-behavior-y: none;
+  -webkit-overflow-scrolling: auto;
+  user-select: none; /* Silencia as seleções de texto acidentais ao arrastar/clicar */
+  touch-action: pan-x pan-y; /* Permite toques padrão mas desencoraja gestos de arrasto totais do viewport */
+  background-color: #09090b; /* Fundo padrão idêntico ao carregamento dark para evitar flickers brancos */
+}
+
+/* Classes de respiro para áreas seguras de qualquer celular (notch, câmera frontal e barra inferior) */
+.safe-pt {
+  padding-top: 0.5rem !important;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 0.5rem) !important;
+}
+
+.safe-pb {
+  padding-bottom: 0.5rem !important;
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem) !important;
+}
+
+.safe-pb-panel {
+  padding-bottom: 1rem !important;
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem) !important;
+}
+
+.safe-mb {
+  margin-bottom: 0.5rem !important;
+  margin-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem) !important;
+}
+
+/* Garante altura perfeita dinâmica sem exceder o visor no iOS/Android */
+.dynamic-viewport-height {
+  height: 100vh;
+  height: 100dvh;
+}
+
+/* Garante que áreas selecionáveis (inputs, áreas de edição) mantenham o comportamento correto */
+input, select, textarea, [contenteditable="true"] {
+  user-select: text;
+}

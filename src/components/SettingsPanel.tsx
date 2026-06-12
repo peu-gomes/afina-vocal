@@ -132,7 +132,7 @@ export default function SettingsPanel({
         className="relative z-50 w-full max-w-md h-full bg-white dark:bg-zinc-950 border-l border-zinc-100 dark:border-zinc-900 shadow-2xl flex flex-col transition-colors duration-300"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100 dark:border-zinc-900 shrink-0">
+        <div className="flex items-center justify-between px-5 pb-4 safe-pt border-b border-zinc-100 dark:border-zinc-900 shrink-0">
           <div className="flex items-center gap-2">
             <Sliders className="w-5 h-5 text-indigo-500" />
             <h3 className="text-sm font-black font-sans tracking-tight text-zinc-900 dark:text-white">
@@ -171,7 +171,7 @@ export default function SettingsPanel({
         </div>
 
         {/* Categorized and Segmented Body (No scrolling needed in most segments, highly compact!) */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-5 scrollbar-none">
+        <div className="flex-1 overflow-y-auto p-5 pb-12 safe-pb-panel space-y-5 scrollbar-none">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
@@ -772,6 +772,51 @@ export default function SettingsPanel({
                       >
                         <div className="w-4.5 h-4.5 rounded-full bg-white shadow-xs" />
                       </button>
+                    </div>
+
+                    {/* DEDICATED NEW SECTION: AUTO-STOP DURATION CONFIGURATION */}
+                    <div className="py-3 border-t border-zinc-100 dark:border-zinc-900 mt-2">
+                      <div className="text-[10px] uppercase font-extrabold tracking-wider text-indigo-500 mb-2">
+                        Duração de Tom Guia (Auto-Stop)
+                      </div>
+                      <div className="bg-zinc-100/40 dark:bg-zinc-900/35 border border-zinc-200/50 dark:border-zinc-900 p-3.5 rounded-2xl space-y-3">
+                        <div className="flex items-start">
+                          <label className="flex items-start gap-2.5 cursor-pointer select-none flex-1">
+                            <input
+                              type="checkbox"
+                              checked={preferences.playDurationLimitEnabled}
+                              onChange={(e) => updatePref('playDurationLimitEnabled', e.target.checked)}
+                              className="mt-0.5 w-4 h-4 rounded border-zinc-300 dark:border-zinc-700 text-indigo-600 focus:ring-indigo-500/20 bg-white dark:bg-zinc-950 cursor-pointer"
+                            />
+                            <div>
+                              <span className="text-[11px] font-bold text-zinc-750 dark:text-zinc-300">Play for X seconds</span>
+                              <span className="text-[9px] text-zinc-450 block mt-0.5 font-medium leading-relaxed">
+                                Cessa o som guia automaticamente após alguns segundos para encorajar cantar a cappella e de ouvido livre.
+                              </span>
+                            </div>
+                          </label>
+                        </div>
+
+                        {/* Slider to adjust the duration from 1 to 10 seconds */}
+                        <div className={`space-y-2 transition-all duration-300 ${preferences.playDurationLimitEnabled ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                          <div className="flex justify-between items-center text-[10px] font-bold text-zinc-500">
+                            <span>Duração do Som Guia (X)</span>
+                            <span className="font-mono text-indigo-650 dark:text-indigo-400 font-black text-[10px] bg-white dark:bg-zinc-905 px-2 py-0.5 rounded shadow-3xs border border-zinc-150 dark:border-zinc-850">
+                              {preferences.playDurationSeconds.toFixed(1)} segundos
+                            </span>
+                          </div>
+                          <input
+                            type="range"
+                            min="1"
+                            max="10"
+                            step="0.5"
+                            value={preferences.playDurationSeconds}
+                            onChange={(e) => updatePref('playDurationSeconds', Number(e.target.value))}
+                            disabled={!preferences.playDurationLimitEnabled}
+                            className="w-full h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                          />
+                        </div>
+                      </div>
                     </div>
 
                     {/* Continuous microphoning */}

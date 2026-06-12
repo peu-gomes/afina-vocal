@@ -125,6 +125,11 @@ export default function App() {
     preferencesRef.current = preferences;
   }, [preferences]);
 
+  const isPlayingReferenceRef = useRef(isPlayingReference);
+  useEffect(() => {
+    isPlayingReferenceRef.current = isPlayingReference;
+  }, [isPlayingReference]);
+
   const centsHistoryRef = useRef<number[]>([]);
 
   // --- 4.1 Developer Mode & Diagnostic States ---
@@ -152,12 +157,62 @@ export default function App() {
   });
 
   const devHoldTimeoutRef = useRef<any>(null);
+  const playLimitTimeoutRef = useRef<any>(null);
   const consecutiveNoteRef = useRef<{ noteMidi: number; count: number }>({ noteMidi: -1, count: 0 });
   const lastValidPitchRef = useRef<PitchInfo | null>(null);
   const fpsFrameCountRef = useRef(0);
   const fpsLastTimeRef = useRef(performance.now());
   const lastAnalysisTimeRef = useRef(performance.now());
   const lastStatsUpdateRef = useRef(0);
+  const wakeLockRef = useRef<any>(null);
+
+  // Screen Wake Lock API to prevent the screen from going to sleep or locking during vocal practice
+  useEffect(() => {
+    const requestWakeLock = async () => {
+      if ('wakeLock' in navigator && isListening) {
+        try {
+          if (!wakeLockRef.current) {
+            wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+            console.log('Screen Wake Lock acquired.');
+          }
+        } catch (err) {
+          console.warn('Failed to acquire Screen Wake Lock:', err);
+        }
+      }
+    };
+
+    const releaseWakeLock = async () => {
+      if (wakeLockRef.current) {
+        try {
+          await wakeLockRef.current.release();
+          wakeLockRef.current = null;
+          console.log('Screen Wake Lock released.');
+        } catch (err) {
+          console.warn('Failed to release Screen Wake Lock:', err);
+        }
+      }
+    };
+
+    if (isListening) {
+      requestWakeLock();
+    } else {
+      releaseWakeLock();
+    }
+
+    // Handle visibility changes (re-acquire when returning to foreground)
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible' && isListening) {
+        await requestWakeLock();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      releaseWakeLock();
+    };
+  }, [isListening]);
 
   // Auto-dismiss developer activation toasts
   useEffect(() => {
@@ -193,6 +248,28 @@ export default function App() {
       startReferenceNote(freq, referenceVolume, preferences.guideWaveform);
     }
   }, [preferences.guideWaveform, targetMidi, referenceVolume, isPlayingReference]);
+
+  // Automatically stops playing reference note after X seconds if duration limit is active
+  useEffect(() => {
+    if (playLimitTimeoutRef.current) {
+      clearTimeout(playLimitTimeoutRef.current);
+      playLimitTimeoutRef.current = null;
+    }
+
+    if (isPlayingReference && preferences.playDurationLimitEnabled) {
+      playLimitTimeoutRef.current = setTimeout(() => {
+        stopReferenceNote();
+        setIsPlayingReference(false);
+      }, preferences.playDurationSeconds * 1000);
+    }
+
+    return () => {
+      if (playLimitTimeoutRef.current) {
+        clearTimeout(playLimitTimeoutRef.current);
+        playLimitTimeoutRef.current = null;
+      }
+    };
+  }, [isPlayingReference, targetMidi, preferences.playDurationLimitEnabled, preferences.playDurationSeconds]);
 
   // --- 5. Settings Calculations ---
   const currentTolerance = useMemo(() => {
@@ -696,6 +773,15 @@ export default function App() {
     }
 
     const checkInterval = setInterval(() => {
+      // If we are in play-duration-limited guide mode and the reference note is actively playing,
+      // pause/reset hold counters to avoid checking pitch from speaker leakage feedback!
+      if (preferencesRef.current.playDurationLimitEnabled && isPlayingReferenceRef.current) {
+        centsHistoryRef.current = [];
+        holdTimeCurrent.current = 0;
+        setHoldProgress(0);
+        return;
+      }
+
       const activeInfo = activePitchRef.current;
 
       if (activeInfo) {
@@ -939,9 +1025,9 @@ export default function App() {
 
   return (
     <div className={isDarkMode ? 'dark' : ''}>
-      <div className="w-screen h-screen flex flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 transition-colors duration-300">
+      <div className="w-full dynamic-viewport-height flex flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 transition-colors duration-300">
                 {/* HEADER BAR */}
-        <header className="flex items-center justify-between px-6 py-3 border-b border-zinc-200/40 dark:border-zinc-900 shrink-0 select-none bg-white/30 dark:bg-zinc-950/20 backdrop-blur-xs">
+        <header className="flex items-center justify-between px-6 pb-3 safe-pt border-b border-zinc-200/40 dark:border-zinc-900 shrink-0 select-none bg-white/30 dark:bg-zinc-950/20 backdrop-blur-xs">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/10 dark:shadow-none">
               <span className="font-sans font-black text-sm tracking-tight">AV</span>
@@ -955,12 +1041,12 @@ export default function App() {
 
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-100 dark:bg-zinc-900 text-[10px] font-bold text-zinc-500">
             <div className={`w-1.5 h-1.5 rounded-full ${isListening ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-400'}`} />
-            <span>{isListening ? 'Monitorando voz' : 'Microfone inativo'}</span>
+            <span>{isListening ? 'Voz Ativa • Tela Sempre Ligada' : 'Microfone inativo'}</span>
           </div>
         </header>
 
         {/* MAIN GAME TUNNING CONTAINER */}
-        <main className="flex-1 relative flex flex-col justify-between py-4 overflow-y-auto">
+        <main className="flex-1 relative flex flex-col justify-between pt-4 pb-0 overflow-hidden">
           
           {micError && (
             <div className="mx-6 mb-4 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-2xl flex gap-3 text-sm animate-in slide-in-from-top duration-300">
@@ -1016,7 +1102,7 @@ export default function App() {
           />
 
           {/* ERGONOMIC DIGITAL INSTRUMENTS BOTTOM DOCK */}
-          <section className="w-full max-w-md mx-auto px-5 pb-2 shrink-0 select-none animate-in slide-in-from-bottom duration-300">
+          <section className={`w-full max-w-md mx-auto px-5 shrink-0 select-none animate-in slide-in-from-bottom duration-300 ${preferences.devModeEnabled ? 'pb-2' : 'safe-pb pb-2'}`}>
             <div className="p-3 bg-white dark:bg-zinc-900/90 backdrop-blur-md rounded-2xl shadow-xl shadow-zinc-200/40 dark:shadow-none border border-zinc-200/50 dark:border-zinc-800/80 flex items-center justify-between gap-3">
               
               {/* 1. Left Trigger: Ergonomic Mic toggle */}
@@ -1186,7 +1272,7 @@ export default function App() {
 
         {/* COMPREHENSIVE COLLAPSIBLE DEVELOPER DASHBOARD */}
         {preferences.devModeEnabled && (
-          <section className="w-full shrink-0 border-t border-zinc-200 bg-zinc-950 dark:border-zinc-800 text-zinc-100 flex flex-col transition-all duration-300 z-[40]">
+          <section className="w-full shrink-0 border-t border-zinc-200 bg-zinc-950 dark:border-zinc-800 text-zinc-100 flex flex-col transition-all duration-300 z-[40] safe-pb">
             {/* Header / Collapse Bar */}
             <header 
               onClick={() => setIsDevDashboardMinimized(!isDevDashboardMinimized)}

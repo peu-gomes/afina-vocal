@@ -205,7 +205,7 @@ export default function PitchTunerIndicator({
   }[deviationState];
 
   return (
-    <div id="full-pitch-tuner-container" className="flex flex-col items-center justify-center w-full px-4 h-full flex-1 max-w-lg mx-auto">
+    <div id="full-pitch-tuner-container" className="flex flex-col items-center justify-center w-full px-4 flex-1 max-w-lg mx-auto">
       
       {/* 1. Circle holder incorporating: Target Note & Radial hold Progress */}
       <div className="relative flex items-center justify-center w-64 h-64 select-none">

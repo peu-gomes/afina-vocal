@@ -63,6 +63,8 @@ export interface UserPreferences {
   continuousMicrophone: boolean;
   limitToRange: boolean;
   autoplayOnChange: boolean;
+  playDurationLimitEnabled: boolean;
+  playDurationSeconds: number;
   
   showDetectedNote: boolean;
   showFrequencyHz: boolean;
@@ -119,6 +121,8 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   continuousMicrophone: true,
   limitToRange: true,
   autoplayOnChange: true,
+  playDurationLimitEnabled: false,
+  playDurationSeconds: 3.0,
   
   showDetectedNote: true,
   showFrequencyHz: true,

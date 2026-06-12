@@ -1,0 +1,25 @@
+{
+  "name": "AfinaVocal - Treinador Vocal",
+  "short_name": "AfinaVocal",
+  "description": "Treinador digital de afinação vocal simples, intuitivo e visual para iniciantes.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#6366f1",
+  "orientation": "portrait-primary",
+  "categories": ["music", "education", "utilities"],
+  "icons": [
+    {
+      "src": "/logo_afinavocal.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo_afinavocal.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}
